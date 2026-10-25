@@ -1,0 +1,10 @@
+# Phase 1 runtime uses only the Python standard library.
+pytest>=8.4,<10
+# Phase 2A: Foundry's OpenAI-compatible v1 API and local configuration.
+openai>=3.37,<4
+python-dotenv>=1.2.4,<2
+# Phase 3: customer chat and confirmed complaint intake.
+streamlit>=1.50,<2
+# Phase 4: calculated retail analytics and interactive charts.
+pandas>=2.2,<4
+plotly>=6,<7

@@ -23,7 +23,7 @@ Never invent a Case ID or claim success after a failed database write.
 
 ## Case states
 
-New cases have status "Submitted". Authorised staff may later mark a case
+New cases have status "Open". Authorised staff may later mark a case
 "Under review" or "Closed". These statuses do not mean that a refund was
 approved or paid. Staff case-management actions are outside this prototype.
 

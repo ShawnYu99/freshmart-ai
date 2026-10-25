@@ -1,10 +1,43 @@
 # Final validation checklist
 
-Validated **2026-10-25** against the current working tree. All retail information
-and policies are synthetic. These results describe observed checks, not a
+Portfolio/browser validation was recorded **2026-10-25**, before the final
+consistency improvements below. All retail information and policies are
+synthetic. These results describe observed checks, not a
 production certification or a guarantee about future model responses.
 
-## Acceptance checklist
+## Final consistency review: deterministic validation
+
+The final review aligned the complaint policy with application status `Open`,
+corrected both RAG prompts to acknowledge the existing complaint form, added
+guards against common unconfirmed case-action claims, and simplified source
+summaries without removing original evidence metadata.
+
+| Check | Actual result |
+|---|---|
+| `python -m pytest -q` | **303 passed, 0 failed, 0 skipped** in 4.25 seconds |
+| `python -m pip check` | No broken requirements found |
+| `git diff --check` | Passed |
+| Existing policy index refreshed | All **17 passages** match current source files; old initial-status wording removed |
+| Policy provenance | Original document/section IDs, titles, versions, dates, and paths retained |
+| Operational preservation | All six stores, four products, 2,000 sales lines, 150 inspections, and **27 existing complaints**, including Case IDs, unchanged |
+| Database schema and integrity | Schema/version unchanged; integrity and foreign-key checks passed |
+| Dashboard preservation | All four KPIs unchanged for all-store, NSW, and Chatswood/Strawberries scopes |
+| Credential checks | `.env` ignored/untracked, example key a placeholder, configured key absent from publishable files |
+
+Tests include supported/partial/unsupported RAG results, user/document injection,
+invalid citations, model failures, grounded form guidance without writes,
+unconfirmed-action rejection, grouped source rendering, stale-index replacement,
+confirmed `Open` complaints, retry safety, filters, and dashboard calculations.
+The legacy SQL default and historical `Submitted` records were deliberately
+preserved; the complaint service explicitly inserts `Open`.
+
+**No paid live Foundry calls were executed for these improvements.** Live
+checks are separate manual commands below, not skipped Pytest cases. The
+recorded browser evidence and screenshots do not validate the updated prompt's
+exact wording or the latest source-summary presentation. No Azure resources,
+additional models, application dependencies, or enterprise services were added.
+
+## Recorded portfolio/browser acceptance checklist
 
 - [x] **Genuine deployed RAG:** the running Streamlit application answered the
   Chatswood mouldy-strawberry question through the configured
@@ -43,7 +76,7 @@ The screenshot Case ID belongs to the **isolated validation database**, not the
 user's original demo database. Generated databases are not included in Git.
 The screenshots are recorded evidence, not a substitute for live model inference.
 
-## Code review scope and changes
+## Original portfolio review scope and changes
 
 Reviewed the Streamlit composition, model configuration and output handling,
 FTS retrieval, schema/migration, generator/reset, complaint service, and analytics.
@@ -91,7 +124,7 @@ For the UI check, ask the genuine policy question, review and confirm a syntheti
 complaint, record its actual Case ID, and select NSW / Chatswood / Strawberries
 in the dashboard. Refresh and reconcile it with SQLite.
 
-## Interpretation and remaining limitations
+## Interpretation of the recorded portfolio run
 
 - The 276 tests are offline tests, including mocked inference in unit/UI tests.
   They are distinct from the genuine browser inference described above.

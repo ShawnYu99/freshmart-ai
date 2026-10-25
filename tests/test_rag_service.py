@@ -11,6 +11,7 @@ import pytest
 from scripts import test_rag
 from scripts.generate_data import generate_data
 from src import rag_service
+from src.database import connection
 from src.policy_search import index_policies, retrieve_passages
 from src.rag_service import (
     RagAnswer,
@@ -170,6 +171,56 @@ def test_review_request_and_personal_refund_decision_are_distinct(db, monkeypatc
     assert [p.passage_id for p in result.sources] == [p.passage_id for p in review.sources]
 
 
+def test_generation_and_verifier_share_form_capabilities_without_action_authority():
+    for prompt in (rag_service.SYSTEM_PROMPT, rag_service.VERIFIER_PROMPT):
+        assert rag_service.APPLICATION_CONTEXT in prompt
+        assert '"Quality complaint" tab' in prompt
+        assert "explicitly confirm" in prompt
+        assert "no complaint-service receipts" in prompt or "access to\ncomplaint-service receipts" in prompt
+        assert "no such UI" not in prompt
+        assert "or complaint submission UI" not in prompt
+    assert "briefly acknowledge" in rag_service.SYSTEM_PROMPT
+    assert "ALL policy assertions" in rag_service.VERIFIER_PROMPT
+
+
+def test_grounded_empathy_and_form_guidance_do_not_create_or_change_cases(db, monkeypatch):
+    question = test_rag.TEST_CASES[0][1]
+    passage = next(
+        p for p in retrieve_passages(question, db)
+        if p.source_id == "FM-POL-002" and p.section == "Example: Chatswood strawberries"
+    )
+    payload = supported_payload(passage)
+    payload["claims"][0]["text"] = (
+        "I'm sorry about the strawberries. You can request a quality review "
+        "using the Quality complaint tab; review and explicitly confirm the form."
+    )
+    payload.update(
+        evidence_status="partial",
+        limitation="The final refund decision depends on an authorised review.",
+    )
+    with connection(db) as conn:
+        before = conn.execute("SELECT * FROM complaints ORDER BY CaseID").fetchall()
+    result = send_payload(db, monkeypatch, question, payload)
+    assert result.evidence_status == "partial" and result.insufficient_evidence
+    assert result.sources == (passage,)
+    assert "Quality complaint tab" in result.answer
+    assert all(c.quote in passage.content for c in result.citations)
+    with connection(db) as conn:
+        assert conn.execute("SELECT * FROM complaints ORDER BY CaseID").fetchall() == before
+
+
+def test_current_new_case_status_is_supported_by_indexed_policy(db, monkeypatch):
+    question = "What status do new complaint cases have?"
+    passage = next(
+        p for p in retrieve_passages(question, db)
+        if p.source_id == "FM-PROC-001" and p.section == "Case states"
+    )
+    result = send_payload(db, monkeypatch, question, supported_payload(passage))
+    assert result.evidence_status == "supported" and not result.insufficient_evidence
+    assert 'New cases have status "Open".' in result.answer
+    assert "Submitted" not in result.answer
+
+
 def test_no_evidence_never_calls_model_or_claims_sources(db, monkeypatch):
     monkeypatch.setattr(
         rag_service, "generate_answer",
@@ -321,6 +372,43 @@ def test_malicious_model_approval_is_withheld_even_with_valid_citations(db, monk
     "I cannot determine that you will get a refund.",
 ])
 def test_negative_and_unresolved_answers_are_not_affirmative_approval(text):
+    assert not unsafe_answer(text)
+
+
+@pytest.mark.parametrize("text", [
+    "I have submitted your quality complaint.",
+    "I've created your complaint.",
+    "I\u2019ve created your complaint.",
+    "We have already saved your case.",
+    "Your complaint has been successfully submitted.",
+    "Your case is now Open.",
+    "I have changed your case status to Closed.",
+    "Your complaint status has been changed.",
+    "I can submit your complaint for you.",
+    "I will create a complaint.",
+    "Case ID: FM-0123456789ABCDEF0123456789ABCDEF",
+    "Your case ID is FM-MADE-UP.",
+    "I cannot approve a refund, but I have filed your complaint.",
+    "It is unclear whether your complaint has been submitted, but I have submitted your complaint.",
+])
+def test_unconfirmed_case_actions_and_invented_ids_are_withheld(db, monkeypatch, text):
+    payload = supported_payload(retrieve_passages("quality complaint", db)[0])
+    payload["claims"][0]["text"] = text
+    with pytest.raises(RagError, match="Unsafe model answer withheld"):
+        send_payload(db, monkeypatch, "quality complaint", payload)
+
+
+@pytest.mark.parametrize("text", [
+    "You can use the Quality complaint tab to submit your concern for review.",
+    "Review and explicitly confirm the form before Python saves the complaint.",
+    'New cases have status "Open".',
+    "I cannot create a complaint or change its status.",
+    "Your complaint has not been submitted by this assistant.",
+    "I cannot confirm that your case is Open.",
+    "Whether your complaint has been submitted remains unknown.",
+    "Only the application service creates a complaint after explicit confirmation.",
+])
+def test_form_guidance_and_capability_limits_are_not_completed_actions(text):
     assert not unsafe_answer(text)
 
 

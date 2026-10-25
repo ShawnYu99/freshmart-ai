@@ -43,6 +43,10 @@ with no new columns; application submissions explicitly use it. Initialization
 transactionally copies the version 1 complaints table into the updated schema,
 preserves every row, recreates its filter index, and leaves the FTS index and
 other tables intact. Migration failure rolls back the entire change.
+The legacy SQL default remains `Submitted` for direct inserts that omit status;
+it is not the application's initial status. Historical seed records keep
+`Submitted`/`Under review`. The current complaint procedure specifies `Open`,
+matching the explicit application insert, without a further schema migration.
 
 All connections enable foreign keys, commit on success, roll back on exceptions,
 and close on exit. Filter indexes cover store, product, and date. An application
@@ -72,7 +76,7 @@ records, and requires `--yes` at the command line.
 ## Implemented: Phase 2A/2B
 
 ```text
-data/knowledge/*.md (unchanged)
+data/knowledge/*.md (fictional policy sources)
               |
               v
     src.policy_search.index_policies
@@ -134,7 +138,16 @@ from the claims and an explicit limitation, so a separate free-text answer canno
 append uncited material. It rejects unknown IDs, model-supplied quotations, and
 uncited claims rather than supplying fallback citations.
 Metadata comes from SQLite. Identical citations are deduplicated, and the
-display groups documents while keeping distinct supporting sections.
+display groups documents into readable section summaries while keeping distinct
+supporting sections, original IDs, paths, and quotations.
+
+Both inference prompts share trusted application context identifying the existing
+**Quality complaint** tab. They allow brief empathy and form navigation alongside
+policy-supported guidance; these are not new policy evidence. All substantive
+policy assertions still require retrieved excerpts and grounding verification.
+The form is only for fresh produce quality concerns, not online-order actions.
+The assistant receives no complaint-service receipt and cannot claim a write or
+status change succeeded, invent a Case ID, or submit on the customer's behalf.
 
 The same deployment then checks whether the selected original quotes support
 every claim and classifies the evidence independently of the generator's draft
@@ -148,7 +161,8 @@ This is **not** a proof of semantic entailment: the same model can make correlat
 errors. Production still needs grounding evaluation and review.
 User questions and retrieved text are untrusted
 lower-priority data. An output guard rejects the known attack marker and common
-affirmative refund approval/payment wording. This is not a general-purpose
+affirmative refund approval/payment wording, common unconfirmed complaint-action
+claims, and Case ID-shaped output. This is not a general-purpose
 language safety verifier. Whole-request safety refusals must be explicitly
 unsupported and uncited; live checks report them separately from policy answers.
 

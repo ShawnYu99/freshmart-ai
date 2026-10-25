@@ -34,10 +34,16 @@ def show_answer(result: RagAnswer) -> None:
                 documents.setdefault(source.source_id, []).append(source)
             for sections in documents.values():
                 document = sections[0]
-                st.write(document.title)
+                numbers = sorted(
+                    {section.passage_id.split("#section-", 1)[1] for section in sections},
+                    key=int,
+                )
+                label = "Section" if len(numbers) == 1 else "Sections"
+                st.write(f"{document.title} - {label} {', '.join(numbers)}")
                 st.caption(f"{document.source_id} | Version {document.version}")
+                st.text(document.source_path)
                 for section in sections:
-                    st.text(f"{section.passage_id} | {section.section}\n{section.source_path}")
+                    st.text(f"{section.passage_id} | {section.section}")
                     quotes = dict.fromkeys(
                         citation.quote for citation in result.citations
                         if citation.passage.passage_id == section.passage_id

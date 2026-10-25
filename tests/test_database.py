@@ -155,7 +155,8 @@ def test_case_and_submission_token_uniqueness(db):
         conn.execute("UPDATE complaints SET ProofOfPurchase = NULL")
 
 
-def test_new_case_can_be_read_by_another_connection(db):
+def test_legacy_sql_default_is_preserved_across_connections(db):
+    """Direct legacy inserts retain Submitted; the complaint service writes Open."""
     with connection(db) as conn:
         conn.execute(
             """INSERT INTO complaints (

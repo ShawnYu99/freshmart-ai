@@ -57,6 +57,53 @@ def test_index_is_repeatable_separate_and_preserves_records_and_files(db):
     assert len(retrieve_passages("refund", db)) > 0
 
 
+def test_refresh_replaces_stale_status_and_sections_without_operational_changes(db, tmp_path):
+    original = operational_snapshot(db)
+    legacy_docs = tmp_path / "legacy-policies"
+    legacy_docs.mkdir()
+    for path in KNOWLEDGE_DIR.glob("*.md"):
+        (legacy_docs / path.name).write_text(path.read_text().replace(
+            'New cases have status "Open".', 'New cases have status "Submitted".',
+        ))
+    index_policies(db, directory=legacy_docs)
+    with connection(db) as conn:
+        schema = conn.execute(
+            "SELECT name, sql FROM sqlite_master WHERE name IN "
+            "('stores', 'products', 'sales', 'quality_inspections', 'complaints') ORDER BY name"
+        ).fetchall()
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        old = conn.execute(
+            "SELECT content FROM policy_passages_fts WHERE passage_id = ?",
+            ("FM-PROC-001#section-2",),
+        ).fetchone()[0]
+        assert 'New cases have status "Submitted".' in old
+        conn.execute(
+            "UPDATE policy_passages_fts SET passage_id = ? WHERE passage_id = ?",
+            ("FM-PROC-001#section-99", "FM-PROC-001#section-2"),
+        )
+
+    assert index_policies(db) == 17
+    expected = read_policy_passages()
+    with connection(db) as conn:
+        rows = conn.execute("SELECT * FROM policy_passages_fts ORDER BY passage_id").fetchall()
+        assert [tuple(row) for row in rows] == [
+            (
+                p.passage_id, p.source_id, p.title, p.version, p.effective_date,
+                p.source_path, p.preamble, p.section, p.content,
+            )
+            for p in sorted(expected, key=lambda p: p.passage_id)
+        ]
+        assert conn.execute(
+            "SELECT name, sql FROM sqlite_master WHERE name IN "
+            "('stores', 'products', 'sales', 'quality_inspections', 'complaints') ORDER BY name"
+        ).fetchall() == schema
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == version
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert operational_snapshot(db) == original
+    status = next(p for p in expected if p.passage_id == "FM-PROC-001#section-2")
+    assert 'New cases have status "Open".' in status.content
+
+
 @pytest.mark.parametrize(("question", "expected"), [
     ("I bought mouldy strawberries from Chatswood yesterday. Can I get a refund?", "FM-POL-002"),
     ("My online grocery order is missing an item. What should I do?", "FM-POL-003"),

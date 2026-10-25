@@ -60,6 +60,7 @@ deployment. Here are the original source title, section, and excerpt.
 Notice the distinction: the policy can support submitting a review request,
 but it cannot establish this customer's final refund decision. A supported
 negative answer, such as no refund guarantee, is different from missing evidence.
+The assistant can point to the complaint form; that guidance does not create a case.
 
 I validate source identifiers and use a second bounded check with the same model.
 That adds latency and is not a proof against hallucination. If inference fails,

@@ -10,7 +10,7 @@ from src import analytics, complaints, rag_service
 from src.analytics import DashboardFilters, load_dashboard
 from src.database import ROOT, connection
 from src.policy_search import retrieve_passages
-from src.rag_service import PolicyCitation, RagAnswer, RagError
+from src.rag_service import PolicyCitation, RagAnswer, RagError, evidence_excerpts
 
 
 @pytest.fixture
@@ -111,6 +111,44 @@ def test_chat_displays_sources_and_preserves_history_without_repeating_inference
     at.run()
     assert not at.exception and len(at.chat_message) == 2
     assert len(questions) == 1
+    assert count(path) == 25
+
+
+def test_source_summaries_group_sections_and_preserve_only_cited_evidence(app, monkeypatch):
+    at, path = app
+    hits = retrieve_passages("mouldy strawberries refund guarantee", path, limit=12)
+    selected = tuple(
+        next(p for p in hits if p.passage_id == identifier)
+        for identifier in (
+            "FM-POL-002#section-3", "FM-POL-002#section-1", "FM-POL-001#section-1",
+        )
+    )
+    citations = tuple(
+        PolicyCitation(p, next(iter(evidence_excerpts((p,)).values()))[1], "Offline fixture claim.")
+        for p in selected
+    )
+    result = RagAnswer(
+        "Offline fixture: use the Quality complaint tab to request review, not approval.",
+        selected, hits, True, True, evidence_status="partial",
+        citations=(*citations, citations[0]),
+    )
+    monkeypatch.setattr(rag_service, "answer_question", lambda question: result)
+    at.chat_input[0].set_value("Can I request a quality review?").run()
+    assert not at.exception
+    summaries = [item.value for item in at.markdown]
+    assert summaries.count("Refund and Exchange Policy - Sections 1, 3") == 1
+    assert summaries.count("Fresh Produce Quality Policy - Section 1") == 1
+    details = [item.value for item in at.text]
+    for passage in selected:
+        assert f"{passage.passage_id} | {passage.section}" in details
+        assert details.count(passage.source_path) == 1
+    for citation in citations:
+        assert details.count(citation.quote) == 1
+    assert len(at.expander) == 1 and at.expander[0].label == "Policy sources used"
+    assert all(
+        not any(p.passage_id in text for text in details)
+        for p in hits if p not in selected
+    )
     assert count(path) == 25
 
 
